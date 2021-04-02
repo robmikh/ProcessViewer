@@ -1,5 +1,6 @@
 #pragma once
 #include <robmikh.common/DesktopWindow.h>
+#include "Process.h"
 
 struct MainWindow : robmikh::common::desktop::DesktopWindow<MainWindow>
 {
@@ -9,26 +10,12 @@ struct MainWindow : robmikh::common::desktop::DesktopWindow<MainWindow>
 	LRESULT MessageHandler(UINT const message, WPARAM const wparam, LPARAM const lparam);
 
 private:
-	enum class Architecture
-	{
-		Unknown,
-		x86,
-		x64,
-		ARM,
-		ARM64
-	};
 
-	struct Process
+	enum class ColumnSorting
 	{
-		DWORD Pid;
-		std::wstring Name;
-		USHORT ArchitectureValue;
+		Ascending,
+		Descending
 	};
-
-	static std::vector<Process> GetAllProcesses();
-	static Architecture GetArchitecture(USHORT value);
-	static std::wstring GetArchitectureString(Architecture arch);
-	static std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W const& entry);
 
 	void CreateControls(HINSTANCE instance);
 	void ResizeProcessListView();
@@ -36,5 +23,9 @@ private:
 
 private:
 	HWND m_processListView = nullptr;
+	std::vector<ProcessInformation> m_columns;
+	size_t m_selectedColumnIndex = 1;
+	ColumnSorting m_columnSort = ColumnSorting::Ascending;
 	std::vector<Process> m_processes;
+
 };

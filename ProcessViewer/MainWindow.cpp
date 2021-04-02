@@ -6,11 +6,6 @@
 
 const std::wstring MainWindow::ClassName = L"ProcessViewer.MainWindow";
 
-wil::unique_handle GetProcessHandleFromPid(DWORD pid)
-{
-    return wil::unique_handle(winrt::check_pointer(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)));
-}
-
 void MainWindow::RegisterWindowClass()
 {
     auto instance = winrt::check_pointer(GetModuleHandleW(nullptr));
@@ -35,6 +30,13 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
         CW_USEDEFAULT, CW_USEDEFAULT, width, height, nullptr, nullptr, instance, this));
     WINRT_ASSERT(m_window);
 
+    m_columns =
+    {
+        ProcessInformation::Name,
+        ProcessInformation::Pid,
+        ProcessInformation::Status,
+        ProcessInformation::Architecture
+    };
     m_processes = GetAllProcesses();
 
     CreateControls(instance);
@@ -57,91 +59,9 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
     return base_type::MessageHandler(message, wparam, lparam);
 }
 
-
-std::vector<MainWindow::Process> MainWindow::GetAllProcesses()
-{
-    std::vector<Process> result;
-    wil::unique_handle snapshot(winrt::check_pointer(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)));
-    PROCESSENTRY32W entry = {};
-    entry.dwSize = sizeof(entry);
-
-    if (Process32FirstW(snapshot.get(), &entry))
-    {
-        do
-        {
-            if (auto process = CreateProcessFromProcessEntry(entry))
-            {
-                result.push_back(*process);
-            }
-        } while (Process32NextW(snapshot.get(), &entry));
-    }
-    return result;
-}
-
-MainWindow::Architecture MainWindow::GetArchitecture(USHORT value)
-{
-    switch (value)
-    {
-    case IMAGE_FILE_MACHINE_I386:
-        return Architecture::x86;
-    case IMAGE_FILE_MACHINE_AMD64:
-        return Architecture::x64;
-    case IMAGE_FILE_MACHINE_ARMNT:
-        return Architecture::ARM;
-    case IMAGE_FILE_MACHINE_ARM64:
-        return Architecture::ARM64;
-    default:
-        return Architecture::Unknown;
-    }
-}
-
-std::wstring MainWindow::GetArchitectureString(Architecture arch)
-{
-    switch (arch)
-    {
-    case Architecture::x86:
-        return L"x86";
-    case Architecture::x64:
-        return L"x64";
-    case Architecture::ARM:
-        return L"ARM";
-    case Architecture::ARM64:
-        return L"ARM64";
-    default:
-        return L"Unknown";
-    }
-}
-
-std::optional<MainWindow::Process> MainWindow::CreateProcessFromProcessEntry(PROCESSENTRY32W const& entry)
-{
-    std::wstring processName(entry.szExeFile);
-    auto pid = entry.th32ProcessID;
-    USHORT archValue = IMAGE_FILE_MACHINE_UNKNOWN;
-    try
-    {
-        auto handle = GetProcessHandleFromPid(pid);
-        USHORT process = 0;
-        USHORT machine = 0;
-        winrt::check_bool(IsWow64Process2(handle.get(), &process, &machine));
-        archValue = process == IMAGE_FILE_MACHINE_UNKNOWN ? machine : process;
-    }
-    catch (winrt::hresult_error const& error)
-    {
-        if (error.code() == E_INVALIDARG)
-        {
-            return std::nullopt;
-        }
-        if (error.code() != E_ACCESSDENIED)
-        {
-            throw;
-        }
-    }
-    return std::optional(Process{ pid, processName, archValue });
-}
-
 void MainWindow::CreateControls(HINSTANCE instance)
 {
-    auto style = WS_TABSTOP | WS_CHILD | WS_BORDER | WS_VISIBLE | LVS_AUTOARRANGE | LVS_REPORT | LVS_OWNERDATA;
+    auto style = WS_TABSTOP | WS_CHILD | WS_BORDER | WS_VISIBLE | LVS_AUTOARRANGE | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_SINGLESEL;
 
     m_processListView = winrt::check_pointer(CreateWindowEx(
         0, //WS_EX_CLIENTEDGE,
@@ -157,13 +77,13 @@ void MainWindow::CreateControls(HINSTANCE instance)
     // Setup columns
     {
         LV_COLUMN column = {};
-        std::vector<std::wstring> columnNames = 
+        std::vector<std::wstring> columnNames;
+        for (auto&& column : m_columns)
         {
-            L"Name",
-            L"PID",
-            L"Status",
-            L"Architecture"
-        };
+            std::wstringstream stream;
+            stream << column;
+            columnNames.push_back(stream.str());
+        }
 
         column.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
         column.fmt = LVCFMT_LEFT;
@@ -173,7 +93,7 @@ void MainWindow::CreateControls(HINSTANCE instance)
             column.pszText = columnNames[i].data();
             ListView_InsertColumn(m_processListView, i, &column);
         }
-        ListView_SetExtendedListViewStyle(m_processListView, LVS_EX_AUTOSIZECOLUMNS | LVS_EX_FULLROWSELECT);
+        ListView_SetExtendedListViewStyle(m_processListView, LVS_EX_AUTOSIZECOLUMNS | LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     }
 
     // Add items
@@ -236,25 +156,81 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
                     auto& process = m_processes[itemIndex];
                     auto pid = process.Pid;
                     std::wstring archString;
-                    auto arch = GetArchitecture(process.ArchitectureValue);
-                    if (arch != Architecture::Unknown)
+                    auto arch = process.GetArchitecture();
+                    std::wstringstream stream;
+                    stream << arch;
+                    if (arch == Architecture::Unknown && process.ArchitectureValue > 0)
                     {
-                        archString = GetArchitectureString(arch);
+                        stream << L": 0x" << std::hex << std::setfill(L'0') << std::setw(4) << process.ArchitectureValue;
                     }
-                    else
-                    {
-                        std::wstringstream stream;
-                        stream << L"Unknown"; 
-                        if (process.ArchitectureValue > 0)
-                        {
-                            stream << L": 0x" << std::hex << std::setfill(L'0') << std::setw(4) << process.ArchitectureValue;
-                        }
-                        archString = stream.str();
-                    }
+                    archString = stream.str();
                     wcsncpy_s(lpdi->item.pszText, lpdi->item.cchTextMax, archString.data(), _TRUNCATE);
                 }
             }
         }
+    }
+        break;
+    case LVN_COLUMNCLICK:
+    {
+        auto messageInfo = (LPNMLISTVIEW)lparam;
+        auto column = messageInfo->iSubItem;
+        if (column != m_selectedColumnIndex)
+        {
+            m_columnSort = ColumnSorting::Ascending;
+        }
+        else
+        {
+            m_columnSort = m_columnSort == ColumnSorting::Ascending ? ColumnSorting::Descending : ColumnSorting::Ascending;
+        }
+        auto sort = m_columnSort;
+        m_selectedColumnIndex = column;
+
+        if (column == 0)
+        {
+            std::sort(m_processes.begin(), m_processes.end(), [sort](Process const& left, Process const& right)
+                {
+                    if (sort == ColumnSorting::Ascending)
+                    {
+                        return left.Name < right.Name;
+                    }
+                    else
+                    {
+                        return left.Name > right.Name;
+                    }
+                });
+        }
+        else if (column == 1)
+        {
+            std::sort(m_processes.begin(), m_processes.end(), [sort](Process const& left, Process const& right)
+                {
+                    if (sort == ColumnSorting::Ascending)
+                    {
+                        return left.Pid < right.Pid;
+                    }
+                    else
+                    {
+                        return left.Pid > right.Pid;
+                    }
+                });
+        }
+        else if (column == 3)
+        {
+            std::sort(m_processes.begin(), m_processes.end(), [sort](Process const& left, Process const& right)
+                {
+                    if (sort == ColumnSorting::Ascending)
+                    {
+                        return left.ArchitectureValue < right.ArchitectureValue;
+                    }
+                    else
+                    {
+                        return left.ArchitectureValue > right.ArchitectureValue;
+                    }
+                });
+        }
+        ListView_RedrawItems(m_processListView, 0, m_processes.size() - 1);
+        ListView_Scroll(m_processListView, 0, 0);
+        ListView_SetItemState(m_processListView, -1, 0, LVIS_SELECTED);
+        ListView_SetItemState(m_processListView, -1, 0, LVIS_FOCUSED);
     }
         break;
     }

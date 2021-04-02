@@ -37,6 +37,7 @@
 #include <utility>
 #include <optional>
 #include <iomanip>
+#include <ostream>
 
 // Windows tool helpers
 #include <tlhelp32.h>

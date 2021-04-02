@@ -12,5 +12,6 @@
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="MainWindow.h" />
+    <ClInclude Include="Process.h" />
   </ItemGroup>
 </Project>
