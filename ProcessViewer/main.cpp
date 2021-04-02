@@ -18,6 +18,8 @@ namespace util
 
 int __stdcall WinMain(HINSTANCE, HINSTANCE, PSTR, int)
 {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED);
+
     // Initialize COM
     winrt::init_apartment();
     
