@@ -59,6 +59,17 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
                             processRemoved(processId);
                         });
                 }
+                else if (className == L"__InstanceModificationEvent")
+                {
+                    auto status = GetProperty<wil::unique_bstr>(win32Process, L"Status");
+                    if (status.get() != nullptr)
+                    {
+                        std::wstringstream stream;
+                        stream << std::setw(5) << std::setfill(L' ') << processId << L" - " << name.get() << L" - " << status.get() << std::endl;
+                        auto message = stream.str();
+                        OutputDebugStringW(message.c_str());
+                    }
+                }
             }
         }));
     winrt::com_ptr<IUnknown> stubUnknown;

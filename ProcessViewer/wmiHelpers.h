@@ -44,7 +44,7 @@ struct EventSink : winrt::implements<EventSink, IWbemObjectSink>
         m_callback = callback;
     }
 
-    HRESULT Indicate(long objectCount, IWbemClassObject** objArray)
+    IFACEMETHODIMP Indicate(long objectCount, IWbemClassObject** objArray)
     {
         try
         {
@@ -59,15 +59,14 @@ struct EventSink : winrt::implements<EventSink, IWbemObjectSink>
         return S_OK;
     }
 
-    HRESULT SetStatus(long flags, HRESULT result, BSTR strParam, IWbemClassObject* objParam)
+    IFACEMETHODIMP SetStatus(long flags, HRESULT result, BSTR strParam, IWbemClassObject* objParam)
     {
+        // TODO: Do I need to handle this?
         if (flags == WBEM_STATUS_COMPLETE)
         {
-            wprintf(L"Call complete. Result: 0x%X\n", result);
         }
         else if (flags == WBEM_STATUS_PROGRESS)
         {
-            wprintf(L"Call in progress.\n");
         }
         return S_OK;
     }
