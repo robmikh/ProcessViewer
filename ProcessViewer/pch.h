@@ -38,6 +38,7 @@
 #include <optional>
 #include <iomanip>
 #include <ostream>
+#include <random>
 
 // Windows tool helpers
 #include <tlhelp32.h>

@@ -2,6 +2,11 @@
 #include "MainWindow.h"
 #include <CommCtrl.h>
 
+namespace winrt
+{
+    using namespace Windows::System;
+}
+
 #define ID_LISTVIEW  2000 // ?????
 
 const std::wstring MainWindow::ClassName = L"ProcessViewer.MainWindow";
@@ -25,10 +30,12 @@ void MainWindow::RegisterWindowClass()
 MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
 {
     auto instance = winrt::check_pointer(GetModuleHandleW(nullptr));
+    m_dispatcherQueue = winrt::DispatcherQueue::GetForCurrentThread();
 
     winrt::check_bool(CreateWindowExW(0, ClassName.c_str(), titleString.c_str(), WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, width, height, nullptr, nullptr, instance, this));
     WINRT_ASSERT(m_window);
+
 
     m_columns =
     {
@@ -39,10 +46,19 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
     };
     m_processes = GetAllProcesses();
 
+    CreateMenuBar();
     CreateControls(instance);
 
     ShowWindow(m_window, SW_SHOWDEFAULT);
     UpdateWindow(m_window);
+}
+
+DWORD GetDebugRandomNumber(size_t size)
+{
+    std::random_device randomDevice;
+    std::mt19937 generator(randomDevice());
+    std::uniform_int_distribution<> distrib(1, size);
+    return distrib(generator);
 }
 
 LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPARAM const lparam)
@@ -55,8 +71,80 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
     case WM_NOTIFY:
         OnListViewNotify(lparam);
         break;
+    case WM_MENUCOMMAND:
+    {
+        auto menu = (HMENU)lparam;
+        int index = wparam;
+        if (menu == m_menuBar.get())
+        {
+            std::srand(std::time(nullptr));
+            int random_variable = std::rand();
+
+            auto process = Process
+            {
+                GetDebugRandomNumber(m_processes.size()), L"DEBUG FAKE PROCESS", IMAGE_FILE_MACHINE_ARM64
+            };
+
+            auto selectedColumnIndex = m_selectedColumnIndex;
+            auto sort = m_columnSort;
+            auto newIndex = std::find_if(m_processes.begin(), m_processes.end(), [selectedColumnIndex, sort, process](Process const& existingProcess)
+                {
+                    if (selectedColumnIndex == 0)
+                    {
+                        if (sort == ColumnSorting::Ascending)
+                        {
+                            return process.Name < existingProcess.Name;
+                        }
+                        else
+                        {
+                            return process.Name > existingProcess.Name;
+                        }
+                    }
+                    else if (selectedColumnIndex == 1)
+                    {
+                        if (sort == ColumnSorting::Ascending)
+                        {
+                            return process.Pid < existingProcess.Pid;
+                        }
+                        else
+                        {
+                            return process.Pid > existingProcess.Pid;
+                        }
+                    }
+                    else if (selectedColumnIndex == 3)
+                    {
+                        if (sort == ColumnSorting::Ascending)
+                        {
+                            return process.ArchitectureValue < existingProcess.ArchitectureValue;
+                        }
+                        else
+                        {
+                            return process.ArchitectureValue > existingProcess.ArchitectureValue;
+                        }
+                    }
+                });
+
+            LVITEM item = {};
+            item.iItem = newIndex - m_processes.begin();
+            m_processes.insert(newIndex, process);
+            ListView_InsertItem(m_processListView, &item);
+        }
+    }
+        break;
     }
     return base_type::MessageHandler(message, wparam, lparam);
+}
+
+void MainWindow::CreateMenuBar()
+{
+    m_menuBar.reset(winrt::check_pointer(CreateMenu()));
+    winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP | MF_STRING, 0, L"Debug"));
+    winrt::check_bool(SetMenu(m_window, m_menuBar.get()));
+    MENUINFO menuInfo = {};
+    menuInfo.cbSize = sizeof(menuInfo);
+    menuInfo.fMask = MIM_STYLE;
+    menuInfo.dwStyle = MNS_NOTIFYBYPOS;
+    winrt::check_bool(SetMenuInfo(m_menuBar.get(), &menuInfo));
 }
 
 void MainWindow::CreateControls(HINSTANCE instance)
@@ -104,15 +192,18 @@ void MainWindow::CreateControls(HINSTANCE instance)
 
 void MainWindow::ResizeProcessListView()
 {
-    RECT rect = {};
-    winrt::check_bool(GetClientRect(m_window, &rect));
-    winrt::check_bool(MoveWindow(
-        m_processListView,
-        rect.left,
-        rect.top,
-        rect.right - rect.left,
-        rect.bottom - rect.top,
-        true));
+    if (m_processListView)
+    {
+        RECT rect = {};
+        winrt::check_bool(GetClientRect(m_window, &rect));
+        winrt::check_bool(MoveWindow(
+            m_processListView,
+            rect.left,
+            rect.top,
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            true));
+    }
 }
 
 void MainWindow::OnListViewNotify(LPARAM const lparam)
@@ -140,32 +231,25 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
             if (lpdi->item.mask & LVIF_TEXT)
             {
                 auto& process = m_processes[itemIndex];
-                if (subItemIndex == 1)
+                auto& column = m_columns[subItemIndex];
+                std::wstringstream stream;
+                switch (column)
                 {
-                    std::wstringstream stream;
+                case ProcessInformation::Pid:
                     stream << process.Pid;
-                    auto pidString = stream.str();
-                    wcsncpy_s(lpdi->item.pszText, lpdi->item.cchTextMax, pidString.data(), _TRUNCATE);
+                    break;
+                case ProcessInformation::Name:
+                    stream << process.Name;
+                    break;
+                case ProcessInformation::Status:
+                    stream << L"Unknown status";
+                    break;
+                case ProcessInformation::Architecture:
+                    stream << process.GetArchitecture();
+                    break;
                 }
-                else if (subItemIndex == 2)
-                {
-                    // TODO: Get status (e.g. Running, Suspended)
-                }
-                else if (subItemIndex == 3)
-                {
-                    auto& process = m_processes[itemIndex];
-                    auto pid = process.Pid;
-                    std::wstring archString;
-                    auto arch = process.GetArchitecture();
-                    std::wstringstream stream;
-                    stream << arch;
-                    if (arch == Architecture::Unknown && process.ArchitectureValue > 0)
-                    {
-                        stream << L": 0x" << std::hex << std::setfill(L'0') << std::setw(4) << process.ArchitectureValue;
-                    }
-                    archString = stream.str();
-                    wcsncpy_s(lpdi->item.pszText, lpdi->item.cchTextMax, archString.data(), _TRUNCATE);
-                }
+                auto string = stream.str();
+                wcsncpy_s(lpdi->item.pszText, lpdi->item.cchTextMax, string.data(), _TRUNCATE);
             }
         }
     }

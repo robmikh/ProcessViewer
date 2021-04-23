@@ -22,6 +22,8 @@ int __stdcall WinMain(HINSTANCE, HINSTANCE, PSTR, int)
 
     // Initialize COM
     winrt::init_apartment();
+
+    auto dispatcherQueueController = util::CreateDispatcherQueueControllerForCurrentThread();
     
     // Register our window classes
     MainWindow::RegisterWindowClass();

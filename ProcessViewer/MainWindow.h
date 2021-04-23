@@ -17,6 +17,7 @@ private:
 		Descending
 	};
 
+	void CreateMenuBar();
 	void CreateControls(HINSTANCE instance);
 	void ResizeProcessListView();
 	void OnListViewNotify(LPARAM const lparam);
@@ -27,5 +28,6 @@ private:
 	size_t m_selectedColumnIndex = 1;
 	ColumnSorting m_columnSort = ColumnSorting::Ascending;
 	std::vector<Process> m_processes;
-
+	wil::unique_hmenu m_menuBar;
+	winrt::Windows::System::DispatcherQueue m_dispatcherQueue{ nullptr };
 };
