@@ -1,6 +1,7 @@
 #pragma once
 #include <robmikh.common/DesktopWindow.h>
 #include "Process.h"
+#include "ProcessWatcher.h"
 
 struct MainWindow : robmikh::common::desktop::DesktopWindow<MainWindow>
 {
@@ -32,4 +33,5 @@ private:
 	std::vector<Process> m_processes;
 	wil::unique_hmenu m_menuBar;
 	winrt::Windows::System::DispatcherQueue m_dispatcherQueue{ nullptr };
+	std::unique_ptr<ProcessWatcher> m_processWatcher;
 };

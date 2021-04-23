@@ -8,10 +8,13 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="MainWindow.cpp" />
+    <ClCompile Include="ProcessWatcher.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="MainWindow.h" />
     <ClInclude Include="Process.h" />
+    <ClInclude Include="wmiHelpers.h" />
+    <ClInclude Include="ProcessWatcher.h" />
   </ItemGroup>
 </Project>

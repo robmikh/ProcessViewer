@@ -89,10 +89,8 @@ inline wil::unique_handle GetProcessHandleFromPid(DWORD pid)
 	return wil::unique_handle(winrt::check_pointer(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)));
 }
 
-inline std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W const& entry)
+inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const& processName)
 {
-	std::wstring processName(entry.szExeFile);
-	auto pid = entry.th32ProcessID;
 	USHORT archValue = IMAGE_FILE_MACHINE_UNKNOWN;
 	try
 	{
@@ -114,6 +112,13 @@ inline std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W cons
 		}
 	}
 	return std::optional(Process{ pid, processName, archValue });
+}
+
+inline std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W const& entry)
+{
+	std::wstring processName(entry.szExeFile);
+	auto pid = entry.th32ProcessID;
+	return CreateProcessFromPid(pid, processName);
 }
 
 inline std::vector<Process> GetAllProcesses()

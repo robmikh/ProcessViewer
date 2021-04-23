@@ -43,9 +43,14 @@
 #include <ostream>
 #include <random>
 #include <algorithm>
+#include <functional>
 
 // Windows tool helpers
 #include <tlhelp32.h>
+
+// WMI
+#include <Wbemidl.h>
+#include "wmiHelpers.h"
 
 // robmikh.common
 #include <robmikh.common/composition.interop.h>

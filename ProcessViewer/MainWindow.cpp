@@ -36,7 +36,6 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
         CW_USEDEFAULT, CW_USEDEFAULT, width, height, nullptr, nullptr, instance, this));
     WINRT_ASSERT(m_window);
 
-
     m_columns =
     {
         ProcessInformation::Name,
@@ -51,6 +50,12 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
 
     ShowWindow(m_window, SW_SHOWDEFAULT);
     UpdateWindow(m_window);
+
+    m_processWatcher = std::make_unique<ProcessWatcher>(m_dispatcherQueue, ProcessWatcher::ProcessAddedCallback(
+        [&](Process process)
+        {
+            InsertProcess(process);
+        }));
 }
 
 std::vector<Process>::iterator MainWindow::GetProcessInsertIterator(Process const& process)

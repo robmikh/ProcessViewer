@@ -23,6 +23,17 @@ int __stdcall WinMain(HINSTANCE, HINSTANCE, PSTR, int)
     // Initialize COM
     winrt::init_apartment();
 
+    winrt::check_hresult(CoInitializeSecurity(
+        nullptr,
+        -1,
+        nullptr,
+        nullptr,
+        RPC_C_AUTHN_LEVEL_DEFAULT,
+        RPC_C_IMP_LEVEL_IMPERSONATE,
+        nullptr,
+        EOAC_NONE,
+        nullptr));
+
     auto dispatcherQueueController = util::CreateDispatcherQueueControllerForCurrentThread();
     
     // Register our window classes
