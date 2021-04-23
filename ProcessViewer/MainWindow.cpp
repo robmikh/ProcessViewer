@@ -87,7 +87,7 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
 
             auto selectedColumnIndex = m_selectedColumnIndex;
             auto sort = m_columnSort;
-            auto newIndex = std::find_if(m_processes.begin(), m_processes.end(), [selectedColumnIndex, sort, process](Process const& existingProcess)
+            auto newIndex = std::lower_bound(m_processes.begin(), m_processes.end(), process, [selectedColumnIndex, sort](Process const& process, Process const& existingProcess)
                 {
                     if (selectedColumnIndex == 0)
                     {
