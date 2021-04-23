@@ -24,6 +24,12 @@ private:
 	void CreateControls(HINSTANCE instance);
 	void ResizeProcessListView();
 	void OnListViewNotify(LPARAM const lparam);
+	
+	static bool CompareProcesses(
+		Process const& process1, 
+		Process const& process2,
+		ColumnSorting const& sort,
+		ProcessInformation const& column);
 
 private:
 	HWND m_processListView = nullptr;

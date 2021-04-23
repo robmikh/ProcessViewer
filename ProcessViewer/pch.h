@@ -44,6 +44,7 @@
 #include <random>
 #include <algorithm>
 #include <functional>
+#include <cstring>
 
 // Windows tool helpers
 #include <tlhelp32.h>

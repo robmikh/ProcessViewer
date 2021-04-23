@@ -12,11 +12,10 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
     m_processAdded = processAdded;
 
     auto locator = winrt::create_instance<IWbemLocator>(CLSID_WbemLocator);
-    winrt::com_ptr<IWbemServices> services;
-    winrt::check_hresult(locator->ConnectServer(BSTR(L"ROOT\\CIMV2"), nullptr, nullptr, 0, 0, 0, 0, services.put()));
+    winrt::check_hresult(locator->ConnectServer(BSTR(L"ROOT\\CIMV2"), nullptr, nullptr, 0, 0, 0, 0, m_services.put()));
 
     winrt::check_hresult(CoSetProxyBlanket(
-        services.get(),
+        m_services.get(),
         RPC_C_AUTHN_WINNT,
         RPC_C_AUTHZ_NONE,
         nullptr,
@@ -25,8 +24,8 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
         nullptr,
         EOAC_NONE));
 
-    auto unsecuredApartment = winrt::create_instance<IUnsecuredApartment>(CLSID_UnsecuredApartment, CLSCTX_LOCAL_SERVER);
-    auto sink = winrt::make_self<EventSink>(EventSink::EventSinkCallback([&](winrt::array_view<IWbemClassObject*> const& objs)
+    m_unsecuredApartment = winrt::create_instance<IUnsecuredApartment>(CLSID_UnsecuredApartment, CLSCTX_LOCAL_SERVER);
+    m_sink = winrt::make_self<EventSink>(EventSink::EventSinkCallback([&](winrt::array_view<IWbemClassObject*> const& objs)
         {
             for (auto& objRaw : objs)
             {
@@ -49,14 +48,14 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
             }
         }));
     winrt::com_ptr<IUnknown> stubUnknown;
-    winrt::check_hresult(unsecuredApartment->CreateObjectStub(sink.get(), stubUnknown.put()));
-    auto stub = stubUnknown.as<IWbemObjectSink>();
-    winrt::check_hresult(services->ExecNotificationQueryAsync(
+    winrt::check_hresult(m_unsecuredApartment->CreateObjectStub(m_sink.get(), stubUnknown.put()));
+    m_sinkStub = stubUnknown.as<IWbemObjectSink>();
+    winrt::check_hresult(m_services->ExecNotificationQueryAsync(
         BSTR(L"WQL"),
         BSTR(L"SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE TargetInstance ISA 'Win32_Process'"),
         WBEM_FLAG_SEND_STATUS,
         nullptr,
-        stub.get()));
+        m_sinkStub.get()));
 }
 
 ProcessWatcher::~ProcessWatcher()

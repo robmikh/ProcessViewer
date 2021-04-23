@@ -58,45 +58,56 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
         }));
 }
 
+bool MainWindow::CompareProcesses(
+    Process const& left, 
+    Process const& right,
+    ColumnSorting const& sort,
+    ProcessInformation const& column)
+{
+    switch (column)
+    {
+    case ProcessInformation::Pid:
+        if (sort == ColumnSorting::Ascending)
+        {
+            return left.Pid < right.Pid;
+        }
+        else
+        {
+            return left.Pid > right.Pid;
+        }
+    case ProcessInformation::Name:
+    {
+        auto value = _wcsicmp(left.Name.c_str(), right.Name.c_str());
+        if (sort == ColumnSorting::Ascending)
+        {
+            return value < 0;
+        }
+        else
+        {
+            return value > 0;
+        }
+    }
+    case ProcessInformation::Status:
+        return false;
+    case ProcessInformation::Architecture:
+        if (sort == ColumnSorting::Ascending)
+        {
+            return left.ArchitectureValue < right.ArchitectureValue;
+        }
+        else
+        {
+            return left.ArchitectureValue > right.ArchitectureValue;
+        }
+    }
+}
+
 std::vector<Process>::iterator MainWindow::GetProcessInsertIterator(Process const& process)
 {
-    auto selectedColumnIndex = m_selectedColumnIndex;
     auto sort = m_columnSort;
-    auto newIndex = std::lower_bound(m_processes.begin(), m_processes.end(), process, [selectedColumnIndex, sort](Process const& process, Process const& existingProcess)
+    auto& column = m_columns[m_selectedColumnIndex];
+    auto newIndex = std::lower_bound(m_processes.begin(), m_processes.end(), process, [sort, column](Process const& process1, Process const& process2)
         {
-            if (selectedColumnIndex == 0)
-            {
-                if (sort == ColumnSorting::Ascending)
-                {
-                    return process.Name < existingProcess.Name;
-                }
-                else
-                {
-                    return process.Name > existingProcess.Name;
-                }
-            }
-            else if (selectedColumnIndex == 1)
-            {
-                if (sort == ColumnSorting::Ascending)
-                {
-                    return process.Pid < existingProcess.Pid;
-                }
-                else
-                {
-                    return process.Pid > existingProcess.Pid;
-                }
-            }
-            else if (selectedColumnIndex == 3)
-            {
-                if (sort == ColumnSorting::Ascending)
-                {
-                    return process.ArchitectureValue < existingProcess.ArchitectureValue;
-                }
-                else
-                {
-                    return process.ArchitectureValue > existingProcess.ArchitectureValue;
-                }
-            }
+            return CompareProcesses(process1, process2, sort, column);
         });
     return newIndex;
 }
@@ -269,8 +280,8 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
     case LVN_COLUMNCLICK:
     {
         auto messageInfo = (LPNMLISTVIEW)lparam;
-        auto column = messageInfo->iSubItem;
-        if (column != m_selectedColumnIndex)
+        auto columnIndex = messageInfo->iSubItem;
+        if (columnIndex != m_selectedColumnIndex)
         {
             m_columnSort = ColumnSorting::Ascending;
         }
@@ -279,50 +290,13 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
             m_columnSort = m_columnSort == ColumnSorting::Ascending ? ColumnSorting::Descending : ColumnSorting::Ascending;
         }
         auto sort = m_columnSort;
-        m_selectedColumnIndex = column;
+        m_selectedColumnIndex = columnIndex;
+        auto& column = m_columns[m_selectedColumnIndex];
 
-        if (column == 0)
-        {
-            std::sort(m_processes.begin(), m_processes.end(), [sort](Process const& left, Process const& right)
-                {
-                    if (sort == ColumnSorting::Ascending)
-                    {
-                        return left.Name < right.Name;
-                    }
-                    else
-                    {
-                        return left.Name > right.Name;
-                    }
-                });
-        }
-        else if (column == 1)
-        {
-            std::sort(m_processes.begin(), m_processes.end(), [sort](Process const& left, Process const& right)
-                {
-                    if (sort == ColumnSorting::Ascending)
-                    {
-                        return left.Pid < right.Pid;
-                    }
-                    else
-                    {
-                        return left.Pid > right.Pid;
-                    }
-                });
-        }
-        else if (column == 3)
-        {
-            std::sort(m_processes.begin(), m_processes.end(), [sort](Process const& left, Process const& right)
-                {
-                    if (sort == ColumnSorting::Ascending)
-                    {
-                        return left.ArchitectureValue < right.ArchitectureValue;
-                    }
-                    else
-                    {
-                        return left.ArchitectureValue > right.ArchitectureValue;
-                    }
-                });
-        }
+        std::sort(m_processes.begin(), m_processes.end(), [sort, column](Process const& process1, Process const& process2)
+            {
+                return CompareProcesses(process1, process2, sort, column);
+            });
         ListView_RedrawItems(m_processListView, 0, m_processes.size() - 1);
         ListView_Scroll(m_processListView, 0, 0);
         ListView_SetItemState(m_processListView, -1, 0, LVIS_SELECTED);
