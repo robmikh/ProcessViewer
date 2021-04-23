@@ -6,10 +6,11 @@ namespace winrt
     using namespace Windows::System;
 }
 
-ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, ProcessAddedCallback processAdded)
+ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, ProcessAddedCallback processAdded, ProcessRemovedCallback processRemoved)
 {
     m_dispatcherQueue = dispatcherQueue;
     m_processAdded = processAdded;
+    m_processRemoved = processRemoved;
 
     auto locator = winrt::create_instance<IWbemLocator>(CLSID_WbemLocator);
     winrt::check_hresult(locator->ConnectServer(BSTR(L"ROOT\\CIMV2"), nullptr, nullptr, 0, 0, 0, 0, m_services.put()));
@@ -36,13 +37,26 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
                 auto name = GetProperty<wil::unique_bstr>(win32Process, L"Name");
                 auto processId = GetProperty<uint32_t>(win32Process, L"ProcessId");
                 
-                if (auto processOpt = CreateProcessFromPid(processId, std::wstring(name.get(), SysStringLen(name.get()))))
+                auto classNameBstr = GetProperty<wil::unique_bstr>(obj, L"__CLASS");
+                auto className = std::wstring(classNameBstr.get(), SysStringLen(classNameBstr.get()));
+                if (className == L"__InstanceCreationEvent")
                 {
-                    auto process = *processOpt;
-                    auto processAdded = m_processAdded;
-                    m_dispatcherQueue.TryEnqueue([process, processAdded]()
+                    if (auto processOpt = CreateProcessFromPid(processId, std::wstring(name.get(), SysStringLen(name.get()))))
+                    {
+                        auto process = *processOpt;
+                        auto processAdded = m_processAdded;
+                        m_dispatcherQueue.TryEnqueue([process, processAdded]()
+                            {
+                                processAdded(process);
+                            });
+                    }
+                }
+                else if (className == L"__InstanceDeletionEvent")
+                {
+                    auto processRemoved = m_processRemoved;
+                    m_dispatcherQueue.TryEnqueue([processId, processRemoved]()
                         {
-                            processAdded(process);
+                            processRemoved(processId);
                         });
                 }
             }
@@ -52,7 +66,7 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
     m_sinkStub = stubUnknown.as<IWbemObjectSink>();
     winrt::check_hresult(m_services->ExecNotificationQueryAsync(
         BSTR(L"WQL"),
-        BSTR(L"SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE TargetInstance ISA 'Win32_Process'"),
+        BSTR(L"SELECT * FROM __InstanceOperationEvent WITHIN 1 WHERE TargetInstance ISA 'Win32_Process'"),
         WBEM_FLAG_SEND_STATUS,
         nullptr,
         m_sinkStub.get()));

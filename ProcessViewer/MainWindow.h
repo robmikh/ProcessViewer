@@ -20,6 +20,7 @@ private:
 
 	std::vector<Process>::iterator GetProcessInsertIterator(Process const& process);
 	void InsertProcess(Process const& process);
+	void RemoveProcessByProcessId(DWORD processId);
 	void CreateMenuBar();
 	void CreateControls(HINSTANCE instance);
 	void ResizeProcessListView();

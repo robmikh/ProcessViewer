@@ -51,10 +51,14 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
     ShowWindow(m_window, SW_SHOWDEFAULT);
     UpdateWindow(m_window);
 
-    m_processWatcher = std::make_unique<ProcessWatcher>(m_dispatcherQueue, ProcessWatcher::ProcessAddedCallback(
-        [&](Process process)
+    m_processWatcher = std::make_unique<ProcessWatcher>(m_dispatcherQueue, 
+        ProcessWatcher::ProcessAddedCallback([&](Process process)
         {
             InsertProcess(process);
+        }),
+        ProcessWatcher::ProcessRemovedCallback([&](DWORD processId)
+        {
+            RemoveProcessByProcessId(processId);
         }));
 }
 
@@ -119,6 +123,21 @@ void MainWindow::InsertProcess(Process const& process)
     item.iItem = newIndex - m_processes.begin();
     m_processes.insert(newIndex, process);
     ListView_InsertItem(m_processListView, &item);
+}
+
+void MainWindow::RemoveProcessByProcessId(DWORD processId)
+{
+    auto it = std::find_if(m_processes.begin(), m_processes.end(), [processId](Process const& process)
+        {
+            return process.Pid == processId;
+        });
+
+    if (it != m_processes.end())
+    {
+        auto index = it - m_processes.begin();
+        m_processes.erase(it);
+        ListView_DeleteItem(m_processListView, index);
+    }
 }
 
 DWORD GetDebugRandomNumber(size_t size)
