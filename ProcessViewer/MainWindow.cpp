@@ -53,6 +53,58 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
     UpdateWindow(m_window);
 }
 
+std::vector<Process>::iterator MainWindow::GetProcessInsertIterator(Process const& process)
+{
+    auto selectedColumnIndex = m_selectedColumnIndex;
+    auto sort = m_columnSort;
+    auto newIndex = std::lower_bound(m_processes.begin(), m_processes.end(), process, [selectedColumnIndex, sort](Process const& process, Process const& existingProcess)
+        {
+            if (selectedColumnIndex == 0)
+            {
+                if (sort == ColumnSorting::Ascending)
+                {
+                    return process.Name < existingProcess.Name;
+                }
+                else
+                {
+                    return process.Name > existingProcess.Name;
+                }
+            }
+            else if (selectedColumnIndex == 1)
+            {
+                if (sort == ColumnSorting::Ascending)
+                {
+                    return process.Pid < existingProcess.Pid;
+                }
+                else
+                {
+                    return process.Pid > existingProcess.Pid;
+                }
+            }
+            else if (selectedColumnIndex == 3)
+            {
+                if (sort == ColumnSorting::Ascending)
+                {
+                    return process.ArchitectureValue < existingProcess.ArchitectureValue;
+                }
+                else
+                {
+                    return process.ArchitectureValue > existingProcess.ArchitectureValue;
+                }
+            }
+        });
+    return newIndex;
+}
+
+void MainWindow::InsertProcess(Process const& process)
+{
+    auto newIndex = GetProcessInsertIterator(process);
+    LVITEM item = {};
+    item.iItem = newIndex - m_processes.begin();
+    m_processes.insert(newIndex, process);
+    ListView_InsertItem(m_processListView, &item);
+}
+
 DWORD GetDebugRandomNumber(size_t size)
 {
     std::random_device randomDevice;
@@ -77,57 +129,12 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
         int index = wparam;
         if (menu == m_menuBar.get())
         {
-            std::srand(std::time(nullptr));
-            int random_variable = std::rand();
-
             auto process = Process
             {
-                GetDebugRandomNumber(m_processes.size()), L"DEBUG FAKE PROCESS", IMAGE_FILE_MACHINE_ARM64
+                GetDebugRandomNumber(12000), L"DEBUG FAKE PROCESS", IMAGE_FILE_MACHINE_ARM64
             };
 
-            auto selectedColumnIndex = m_selectedColumnIndex;
-            auto sort = m_columnSort;
-            auto newIndex = std::lower_bound(m_processes.begin(), m_processes.end(), process, [selectedColumnIndex, sort](Process const& process, Process const& existingProcess)
-                {
-                    if (selectedColumnIndex == 0)
-                    {
-                        if (sort == ColumnSorting::Ascending)
-                        {
-                            return process.Name < existingProcess.Name;
-                        }
-                        else
-                        {
-                            return process.Name > existingProcess.Name;
-                        }
-                    }
-                    else if (selectedColumnIndex == 1)
-                    {
-                        if (sort == ColumnSorting::Ascending)
-                        {
-                            return process.Pid < existingProcess.Pid;
-                        }
-                        else
-                        {
-                            return process.Pid > existingProcess.Pid;
-                        }
-                    }
-                    else if (selectedColumnIndex == 3)
-                    {
-                        if (sort == ColumnSorting::Ascending)
-                        {
-                            return process.ArchitectureValue < existingProcess.ArchitectureValue;
-                        }
-                        else
-                        {
-                            return process.ArchitectureValue > existingProcess.ArchitectureValue;
-                        }
-                    }
-                });
-
-            LVITEM item = {};
-            item.iItem = newIndex - m_processes.begin();
-            m_processes.insert(newIndex, process);
-            ListView_InsertItem(m_processListView, &item);
+            InsertProcess(process);
         }
     }
         break;

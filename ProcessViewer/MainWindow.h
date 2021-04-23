@@ -17,6 +17,8 @@ private:
 		Descending
 	};
 
+	std::vector<Process>::iterator GetProcessInsertIterator(Process const& process);
+	void InsertProcess(Process const& process);
 	void CreateMenuBar();
 	void CreateControls(HINSTANCE instance);
 	void ResizeProcessListView();

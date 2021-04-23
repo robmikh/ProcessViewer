@@ -1,5 +1,8 @@
 ﻿#pragma once
 
+// Collision from minwindef min/max and std
+#define NOMINMAX
+
 // Windows
 #include <windows.h>
 
@@ -39,6 +42,7 @@
 #include <iomanip>
 #include <ostream>
 #include <random>
+#include <algorithm>
 
 // Windows tool helpers
 #include <tlhelp32.h>
