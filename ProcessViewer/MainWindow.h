@@ -39,6 +39,9 @@ private:
 	ColumnSorting m_columnSort = ColumnSorting::Ascending;
 	std::vector<Process> m_processes;
 	wil::unique_hmenu m_menuBar;
+	wil::unique_hmenu m_fileMenu;
+	wil::unique_hmenu m_viewMenu;
+	bool m_viewAccessibleProcess = true;
 	winrt::Windows::System::DispatcherQueue m_dispatcherQueue{ nullptr };
 	std::unique_ptr<ProcessWatcher> m_processWatcher;
 };

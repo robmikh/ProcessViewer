@@ -121,7 +121,7 @@ inline std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W cons
 	return CreateProcessFromPid(pid, processName);
 }
 
-inline std::vector<Process> GetAllProcesses()
+inline std::vector<Process> GetAllProcesses(bool keepInaccessible = true)
 {
 	std::vector<Process> result;
 	wil::unique_handle snapshot(winrt::check_pointer(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)));
@@ -134,7 +134,10 @@ inline std::vector<Process> GetAllProcesses()
 		{
 			if (auto process = CreateProcessFromProcessEntry(entry))
 			{
-				result.push_back(*process);
+				if (keepInaccessible || process->ArchitectureValue != IMAGE_FILE_MACHINE_UNKNOWN)
+				{
+					result.push_back(*process);
+				}
 			}
 		} while (Process32NextW(snapshot.get(), &entry));
 	}

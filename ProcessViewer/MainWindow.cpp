@@ -118,11 +118,14 @@ std::vector<Process>::iterator MainWindow::GetProcessInsertIterator(Process cons
 
 void MainWindow::InsertProcess(Process const& process)
 {
-    auto newIndex = GetProcessInsertIterator(process);
-    LVITEM item = {};
-    item.iItem = newIndex - m_processes.begin();
-    m_processes.insert(newIndex, process);
-    ListView_InsertItem(m_processListView, &item);
+    if (m_viewAccessibleProcess || process.ArchitectureValue != IMAGE_FILE_MACHINE_UNKNOWN)
+    {
+        auto newIndex = GetProcessInsertIterator(process);
+        LVITEM item = {};
+        item.iItem = newIndex - m_processes.begin();
+        m_processes.insert(newIndex, process);
+        ListView_InsertItem(m_processListView, &item);
+    }
 }
 
 void MainWindow::RemoveProcessByProcessId(DWORD processId)
@@ -140,14 +143,6 @@ void MainWindow::RemoveProcessByProcessId(DWORD processId)
     }
 }
 
-DWORD GetDebugRandomNumber(size_t size)
-{
-    std::random_device randomDevice;
-    std::mt19937 generator(randomDevice());
-    std::uniform_int_distribution<> distrib(1, size);
-    return distrib(generator);
-}
-
 LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPARAM const lparam)
 {
     switch (message)
@@ -162,14 +157,28 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
     {
         auto menu = (HMENU)lparam;
         int index = wparam;
-        if (menu == m_menuBar.get())
+        if (menu == m_fileMenu.get())
         {
-            auto process = Process
-            {
-                GetDebugRandomNumber(12000), L"DEBUG FAKE PROCESS", IMAGE_FILE_MACHINE_ARM64
-            };
-
-            InsertProcess(process);
+            // TODO: Check the index, but currently there's only one item
+            PostQuitMessage(0);
+        }
+        else if (menu == m_viewMenu.get())
+        {
+            // TODO: Check the index, but currently there's only one item
+            m_viewAccessibleProcess = !m_viewAccessibleProcess;
+            auto flag = m_viewAccessibleProcess ? MF_CHECKED : MF_UNCHECKED;
+            CheckMenuItem(m_viewMenu.get(), 0, flag);
+            auto sort = m_columnSort;
+            auto& column = m_columns[m_selectedColumnIndex];
+            m_processes = GetAllProcesses(m_viewAccessibleProcess); std::sort(m_processes.begin(), m_processes.end(), [sort, column](Process const& process1, Process const& process2)
+                {
+                    return CompareProcesses(process1, process2, sort, column);
+                });
+            ListView_SetItemCount(m_processListView, m_processes.size());
+            ListView_RedrawItems(m_processListView, 0, m_processes.size() - 1);
+            ListView_Scroll(m_processListView, 0, 0);
+            ListView_SetItemState(m_processListView, -1, 0, LVIS_SELECTED);
+            ListView_SetItemState(m_processListView, -1, 0, LVIS_FOCUSED);
         }
     }
         break;
@@ -180,13 +189,20 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
 void MainWindow::CreateMenuBar()
 {
     m_menuBar.reset(winrt::check_pointer(CreateMenu()));
-    winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP | MF_STRING, 0, L"Debug"));
+    m_viewMenu.reset(winrt::check_pointer(CreatePopupMenu()));
+    m_fileMenu.reset(winrt::check_pointer(CreatePopupMenu()));
+    winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_fileMenu.get()), L"File"));
+    winrt::check_bool(AppendMenuW(m_fileMenu.get(), MF_STRING, 0, L"Exit"));
+    winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_viewMenu.get()), L"View"));
+    winrt::check_bool(AppendMenuW(m_viewMenu.get(), MF_STRING | MF_CHECKED, 0, L"View inaccessible processes"));
     winrt::check_bool(SetMenu(m_window, m_menuBar.get()));
     MENUINFO menuInfo = {};
     menuInfo.cbSize = sizeof(menuInfo);
     menuInfo.fMask = MIM_STYLE;
     menuInfo.dwStyle = MNS_NOTIFYBYPOS;
     winrt::check_bool(SetMenuInfo(m_menuBar.get(), &menuInfo));
+    winrt::check_bool(SetMenuInfo(m_viewMenu.get(), &menuInfo));
+    winrt::check_bool(SetMenuInfo(m_fileMenu.get(), &menuInfo));
 }
 
 void MainWindow::CreateControls(HINSTANCE instance)
