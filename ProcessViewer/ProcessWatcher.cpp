@@ -34,13 +34,13 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
                 obj.copy_from(objRaw);
                 auto targetInstance = GetProperty<winrt::com_ptr<IUnknown>>(obj, L"TargetInstance");
                 auto win32Process = targetInstance.as<IWbemClassObject>();
-                auto name = GetProperty<wil::unique_bstr>(win32Process, L"Name");
-                auto processId = GetProperty<uint32_t>(win32Process, L"ProcessId");
                 
                 auto classNameBstr = GetProperty<wil::unique_bstr>(obj, L"__CLASS");
                 auto className = std::wstring(classNameBstr.get(), SysStringLen(classNameBstr.get()));
                 if (className == L"__InstanceCreationEvent")
                 {
+                    auto name = GetProperty<wil::unique_bstr>(win32Process, L"Name");
+                    auto processId = GetProperty<uint32_t>(win32Process, L"ProcessId");
                     if (auto processOpt = CreateProcessFromPid(processId, std::wstring(name.get(), SysStringLen(name.get()))))
                     {
                         auto process = *processOpt;
@@ -53,6 +53,7 @@ ProcessWatcher::ProcessWatcher(winrt::DispatcherQueue const& dispatcherQueue, Pr
                 }
                 else if (className == L"__InstanceDeletionEvent")
                 {
+                    auto processId = GetProperty<uint32_t>(win32Process, L"ProcessId");
                     auto processRemoved = m_processRemoved;
                     m_dispatcherQueue.TryEnqueue([processId, processRemoved]()
                         {
