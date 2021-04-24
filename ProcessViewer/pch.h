@@ -13,6 +13,7 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Foundation.Numerics.h>
+#include <winrt/Windows.Storage.Pickers.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.h>
 #include <winrt/Windows.UI.Composition.h>
@@ -52,6 +53,9 @@
 // WMI
 #include <Wbemidl.h>
 #include "wmiHelpers.h"
+
+// WinMD
+#include <winmd_reader.h>
 
 // robmikh.common
 #include <robmikh.common/composition.interop.h>

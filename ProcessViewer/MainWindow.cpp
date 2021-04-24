@@ -4,7 +4,13 @@
 
 namespace winrt
 {
+    using namespace Windows::Storage::Pickers;
     using namespace Windows::System;
+}
+
+namespace winmd
+{
+    using namespace winmd::reader;
 }
 
 #define ID_LISTVIEW  2000 // ?????
@@ -180,6 +186,11 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
             ListView_SetItemState(m_processListView, -1, 0, LVIS_SELECTED);
             ListView_SetItemState(m_processListView, -1, 0, LVIS_FOCUSED);
         }
+        else if (menu == m_toolsMenu.get())
+        {
+            // TODO: Check the index, but currently there's only one item
+            CheckBinaryArchitecture();
+        }
     }
         break;
     }
@@ -189,12 +200,15 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
 void MainWindow::CreateMenuBar()
 {
     m_menuBar.reset(winrt::check_pointer(CreateMenu()));
-    m_viewMenu.reset(winrt::check_pointer(CreatePopupMenu()));
     m_fileMenu.reset(winrt::check_pointer(CreatePopupMenu()));
+    m_viewMenu.reset(winrt::check_pointer(CreatePopupMenu()));
+    m_toolsMenu.reset(winrt::check_pointer(CreatePopupMenu()));
     winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_fileMenu.get()), L"File"));
     winrt::check_bool(AppendMenuW(m_fileMenu.get(), MF_STRING, 0, L"Exit"));
     winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_viewMenu.get()), L"View"));
     winrt::check_bool(AppendMenuW(m_viewMenu.get(), MF_STRING | MF_CHECKED, 0, L"View inaccessible processes"));
+    winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_toolsMenu.get()), L"Tools"));
+    winrt::check_bool(AppendMenuW(m_toolsMenu.get(), MF_STRING, 0, L"Check binary architecture"));
     winrt::check_bool(SetMenu(m_window, m_menuBar.get()));
     MENUINFO menuInfo = {};
     menuInfo.cbSize = sizeof(menuInfo);
@@ -203,6 +217,7 @@ void MainWindow::CreateMenuBar()
     winrt::check_bool(SetMenuInfo(m_menuBar.get(), &menuInfo));
     winrt::check_bool(SetMenuInfo(m_viewMenu.get(), &menuInfo));
     winrt::check_bool(SetMenuInfo(m_fileMenu.get(), &menuInfo));
+    winrt::check_bool(SetMenuInfo(m_toolsMenu.get(), &menuInfo));
 }
 
 void MainWindow::CreateControls(HINSTANCE instance)
@@ -339,4 +354,55 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
     }
         break;
     }
+}
+
+winrt::fire_and_forget MainWindow::CheckBinaryArchitecture()
+{
+    auto picker = winrt::FileOpenPicker();
+    InitializeObjectWithWindowHandle(picker);
+    picker.SuggestedStartLocation(winrt::PickerLocationId::ComputerFolder);
+    picker.FileTypeFilter().Append(L".dll");
+    picker.FileTypeFilter().Append(L".exe");
+    auto file = co_await picker.PickSingleFileAsync();
+
+    if (file != nullptr)
+    {
+        co_await m_dispatcherQueue;
+
+        auto name = file.Name();
+        auto wpath = file.Path();
+        auto path = std::string(wpath.begin(), wpath.end());
+        winmd::file_view view(path);
+
+        uint16_t machine = IMAGE_FILE_MACHINE_UNKNOWN;
+        try
+        {
+            // adapted from https://github.com/microsoft/winmd/blob/ab1436427ede293ddad944d3688e83b3fba3a173/src/impl/winmd_reader/database.h#L229
+            auto dos = view.as<winmd::impl::image_dos_header>();
+            if (dos.e_signature != 0x5A4D) // IMAGE_DOS_SIGNATURE
+            {
+                winmd::impl::throw_invalid("Invalid DOS signature");
+            }
+
+            auto pe = view.as<winmd::impl::image_nt_headers32>(dos.e_lfanew);
+            if (pe.FileHeader.NumberOfSections == 0 || pe.FileHeader.NumberOfSections > 100)
+            {
+                winmd::impl::throw_invalid("Invalid PE section count");
+            }
+
+            machine = pe.FileHeader.Machine;
+        }
+        catch (std::invalid_argument const& error)
+        {
+            MessageBoxA(m_window, error.what(), "Process Viewer", MB_OK | MB_ICONERROR);
+            co_return;
+        }
+        auto architecture = MachineValueToArchitecture(machine);
+
+        std::wstringstream stream;
+        stream << name.c_str() << L" targets " << architecture;
+        auto message = stream.str();
+        MessageBoxW(m_window, message.c_str(), L"Process Viewer", MB_OK);
+    }
+    co_return;
 }

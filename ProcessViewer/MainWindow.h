@@ -25,6 +25,8 @@ private:
 	void CreateControls(HINSTANCE instance);
 	void ResizeProcessListView();
 	void OnListViewNotify(LPARAM const lparam);
+
+	winrt::fire_and_forget CheckBinaryArchitecture();
 	
 	static bool CompareProcesses(
 		Process const& process1, 
@@ -41,6 +43,7 @@ private:
 	wil::unique_hmenu m_menuBar;
 	wil::unique_hmenu m_fileMenu;
 	wil::unique_hmenu m_viewMenu;
+	wil::unique_hmenu m_toolsMenu;
 	bool m_viewAccessibleProcess = true;
 	winrt::Windows::System::DispatcherQueue m_dispatcherQueue{ nullptr };
 	std::unique_ptr<ProcessWatcher> m_processWatcher;

@@ -37,6 +37,23 @@ enum class Architecture
 	ARM64
 };
 
+inline Architecture MachineValueToArchitecture(uint16_t value)
+{
+	switch (value)
+	{
+	case IMAGE_FILE_MACHINE_I386:
+		return Architecture::x86;
+	case IMAGE_FILE_MACHINE_AMD64:
+		return Architecture::x64;
+	case IMAGE_FILE_MACHINE_ARMNT:
+		return Architecture::ARM;
+	case IMAGE_FILE_MACHINE_ARM64:
+		return Architecture::ARM64;
+	default:
+		return Architecture::Unknown;
+	}
+}
+
 inline std::wostream& operator<< (std::wostream& os, Architecture const& arch)
 {
 	switch (arch)
@@ -68,19 +85,7 @@ struct Process
 
 	Architecture GetArchitecture()
 	{
-		switch (ArchitectureValue)
-		{
-		case IMAGE_FILE_MACHINE_I386:
-			return Architecture::x86;
-		case IMAGE_FILE_MACHINE_AMD64:
-			return Architecture::x64;
-		case IMAGE_FILE_MACHINE_ARMNT:
-			return Architecture::ARM;
-		case IMAGE_FILE_MACHINE_ARM64:
-			return Architecture::ARM64;
-		default:
-			return Architecture::Unknown;
-		}
+		return MachineValueToArchitecture(ArchitectureValue);
 	}
 };
 
