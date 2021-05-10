@@ -6,6 +6,7 @@ enum class ProcessInformation
     Name,
     Type,
     Architecture,
+    IntegrityLevel,
 };
 
 inline std::wostream& operator<< (std::wostream& os, ProcessInformation const& info)
@@ -23,6 +24,9 @@ inline std::wostream& operator<< (std::wostream& os, ProcessInformation const& i
         break;
     case ProcessInformation::Architecture:
         os << L"Architecture";
+        break;
+    case ProcessInformation::IntegrityLevel:
+        os << L"Integrity Level";
         break;
     }
     return os;
@@ -97,6 +101,60 @@ inline std::wostream& operator<< (std::wostream& os, ProcessType const& type)
     return os;
 }
 
+enum class IntegrityLevel : uint32_t
+{
+    Untrusted = SECURITY_MANDATORY_UNTRUSTED_RID,
+    Low = SECURITY_MANDATORY_LOW_RID,
+    Medium = SECURITY_MANDATORY_MEDIUM_RID,
+    MediumPlus = SECURITY_MANDATORY_MEDIUM_PLUS_RID,
+    High = SECURITY_MANDATORY_HIGH_RID,
+    System = SECURITY_MANDATORY_SYSTEM_RID,
+    ProtectedProcess = SECURITY_MANDATORY_PROTECTED_PROCESS_RID
+};
+
+inline std::wostream& operator<< (std::wostream& os, IntegrityLevel const& ilevel)
+{
+    switch (ilevel)
+    {
+    case IntegrityLevel::Untrusted:
+        return os << L"Untrusted";
+    case IntegrityLevel::Low:
+        return os << L"Low";
+    case IntegrityLevel::Medium:
+        return os << L"Medium";
+    case IntegrityLevel::MediumPlus:
+        return os << L"MediumPlus";
+    case IntegrityLevel::High:
+        return os << L"High";
+    case IntegrityLevel::System:
+        return os << L"System";
+    case IntegrityLevel::ProtectedProcess:
+        return os << L"ProtectedProcess";
+    }
+}
+
+// https://support.microsoft.com/en-us/help/243330/well-known-security-identifiers-in-windows-operating-systems
+inline std::wstring IntegrityLevelToSidString(IntegrityLevel value)
+{
+    switch (value)
+    {
+    case IntegrityLevel::Untrusted:
+        return L"S-1-16-0";
+    case IntegrityLevel::Low:
+        return L"S-1-16-4096";
+    case IntegrityLevel::Medium:
+        return L"S-1-16-8192";
+    case IntegrityLevel::MediumPlus:
+        return L"S-1-16-8448";
+    case IntegrityLevel::High:
+        return L"S-1-16-12288";
+    case IntegrityLevel::System:
+        return L"S-1-16-16384";
+    case IntegrityLevel::ProtectedProcess:
+        return L"S-1-16-20480";
+    }
+}
+
 template<typename T>
 inline std::wostream& operator<< (std::wostream& os, std::optional<T> const& optional)
 {
@@ -117,6 +175,7 @@ struct Process
     std::wstring Name;
     std::optional<ProcessType> Type;
     USHORT ArchitectureValue;
+    std::optional<IntegrityLevel> IntegrityLevel;
 
     Architecture GetArchitecture()
     {
@@ -136,10 +195,56 @@ inline wil::unique_handle GetProcessToken(wil::unique_handle const& processHandl
     return processToken;
 }
 
+template <typename T>
+inline void check_bool_with_expected_error(T result, winrt::hresult expected)
+{
+    if (!result)
+    {
+        // Get the last error
+        auto lastError = HRESULT_FROM_WIN32(GetLastError());
+        if (lastError != expected)
+        {
+            winrt::check_hresult(lastError);
+        }
+    }
+}
+
+inline std::optional<IntegrityLevel> GetIntegrityLevelFromProcessToken(wil::unique_handle const& processToken)
+{
+    // Get the size of the data we'll get back
+    DWORD informationLength = 0;
+    check_bool_with_expected_error(GetTokenInformation(processToken.get(), TokenIntegrityLevel, nullptr, 0, &informationLength), HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));
+
+    // Allocate the memory for the integrity level data
+    wil::unique_hlocal infoData(LocalAlloc(0, informationLength));
+    auto info = (PTOKEN_MANDATORY_LABEL)infoData.get();
+
+    // Get the data for our integrity level
+    winrt::check_bool(GetTokenInformation(processToken.get(), TokenIntegrityLevel, info, informationLength, &informationLength));
+
+    // Get the integrity level from the info we got back
+    auto authorityCount = (DWORD)(UCHAR)*winrt::check_pointer(GetSidSubAuthorityCount(info->Label.Sid));
+    auto integrityLevel = *winrt::check_pointer(GetSidSubAuthority(info->Label.Sid, authorityCount - 1));
+
+    switch (integrityLevel)
+    {
+    case SECURITY_MANDATORY_UNTRUSTED_RID:
+    case SECURITY_MANDATORY_LOW_RID:
+    case SECURITY_MANDATORY_MEDIUM_RID:
+    case SECURITY_MANDATORY_HIGH_RID:
+    case SECURITY_MANDATORY_SYSTEM_RID:
+    case SECURITY_MANDATORY_PROTECTED_PROCESS_RID:
+        return std::optional(static_cast<IntegrityLevel>(integrityLevel));
+    default:
+        return std::nullopt;
+    }
+}
+
 inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const& processName)
 {
     USHORT archValue = IMAGE_FILE_MACHINE_UNKNOWN;
     std::optional<ProcessType> processType = std::nullopt;
+    std::optional<IntegrityLevel> ilevel = std::nullopt;
     try
     {
         auto handle = GetProcessHandleFromPid(pid);
@@ -161,6 +266,8 @@ inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const
         {
             processType = std::optional(ProcessType::Legacy);
         }
+
+        ilevel = GetIntegrityLevelFromProcessToken(token);
     }
     catch (winrt::hresult_error const& error)
     {
@@ -175,7 +282,7 @@ inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const
             throw;
         }
     }
-    return std::optional(Process{ pid, processName, processType, archValue });
+    return std::optional(Process{ pid, processName, processType, archValue, ilevel });
 }
 
 inline std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W const& entry)

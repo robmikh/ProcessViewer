@@ -47,7 +47,8 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
         ProcessInformation::Name,
         ProcessInformation::Pid,
         ProcessInformation::Type,
-        ProcessInformation::Architecture
+        ProcessInformation::Architecture,
+        ProcessInformation::IntegrityLevel,
     };
     m_processes = GetAllProcesses();
 
@@ -136,6 +137,37 @@ bool MainWindow::CompareProcesses(
         else
         {
             return left.ArchitectureValue > right.ArchitectureValue;
+        }
+    case ProcessInformation::IntegrityLevel:
+        if (sort == ColumnSorting::Ascending)
+        {
+            if (!left.IntegrityLevel.has_value())
+            {
+                return true;
+            }
+            else if (!right.IntegrityLevel.has_value())
+            {
+                return false;
+            }
+            else
+            {
+                return *left.IntegrityLevel < *right.IntegrityLevel;
+            }
+        }
+        else
+        {
+            if (!left.IntegrityLevel.has_value())
+            {
+                return false;
+            }
+            else if (!right.IntegrityLevel.has_value())
+            {
+                return true;
+            }
+            else
+            {
+                return *left.IntegrityLevel > *right.IntegrityLevel;
+            }
         }
     }
 }
@@ -349,6 +381,8 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
                 case ProcessInformation::Architecture:
                     stream << process.GetArchitecture();
                     break;
+                case ProcessInformation::IntegrityLevel:
+                    stream << process.IntegrityLevel;
                 }
                 auto string = stream.str();
                 wcsncpy_s(lpdi->item.pszText, lpdi->item.cchTextMax, string.data(), _TRUNCATE);
