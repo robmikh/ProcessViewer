@@ -34,6 +34,8 @@ private:
         ColumnSorting const& sort,
         ProcessInformation const& column);
 
+    winrt::fire_and_forget ShowAboutAsync();
+
 private:
     HWND m_processListView = nullptr;
     std::vector<ProcessInformation> m_columns;
@@ -44,6 +46,7 @@ private:
     wil::unique_hmenu m_fileMenu;
     wil::unique_hmenu m_viewMenu;
     wil::unique_hmenu m_toolsMenu;
+    wil::unique_hmenu m_helpMenu;
     bool m_viewAccessibleProcess = true;
     winrt::Windows::System::DispatcherQueue m_dispatcherQueue{ nullptr };
     std::unique_ptr<ProcessWatcher> m_processWatcher;

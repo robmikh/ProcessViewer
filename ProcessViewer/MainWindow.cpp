@@ -4,8 +4,10 @@
 
 namespace winrt
 {
+    using namespace Windows::Foundation;
     using namespace Windows::Storage::Pickers;
     using namespace Windows::System;
+    using namespace Windows::UI::Popups;
 }
 
 namespace winmd
@@ -252,6 +254,11 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
             // TODO: Check the index, but currently there's only one item
             CheckBinaryArchitecture();
         }
+        else if (menu == m_helpMenu.get())
+        {
+            // TODO: Check the index, but currently there's only one item
+            auto ignored = ShowAboutAsync();
+        }
     }
         break;
     }
@@ -264,12 +271,15 @@ void MainWindow::CreateMenuBar()
     m_fileMenu.reset(winrt::check_pointer(CreatePopupMenu()));
     m_viewMenu.reset(winrt::check_pointer(CreatePopupMenu()));
     m_toolsMenu.reset(winrt::check_pointer(CreatePopupMenu()));
+    m_helpMenu.reset(winrt::check_pointer(CreatePopupMenu()));
     winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_fileMenu.get()), L"File"));
     winrt::check_bool(AppendMenuW(m_fileMenu.get(), MF_STRING, 0, L"Exit"));
     winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_viewMenu.get()), L"View"));
     winrt::check_bool(AppendMenuW(m_viewMenu.get(), MF_STRING | MF_CHECKED, 0, L"View inaccessible processes"));
     winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_toolsMenu.get()), L"Tools"));
     winrt::check_bool(AppendMenuW(m_toolsMenu.get(), MF_STRING, 0, L"Check binary architecture"));
+    winrt::check_bool(AppendMenuW(m_menuBar.get(), MF_POPUP, reinterpret_cast<UINT_PTR>(m_helpMenu.get()), L"Help"));
+    winrt::check_bool(AppendMenuW(m_helpMenu.get(), MF_STRING, 0, L"About"));
     winrt::check_bool(SetMenu(m_window, m_menuBar.get()));
     MENUINFO menuInfo = {};
     menuInfo.cbSize = sizeof(menuInfo);
@@ -279,6 +289,7 @@ void MainWindow::CreateMenuBar()
     winrt::check_bool(SetMenuInfo(m_viewMenu.get(), &menuInfo));
     winrt::check_bool(SetMenuInfo(m_fileMenu.get(), &menuInfo));
     winrt::check_bool(SetMenuInfo(m_toolsMenu.get(), &menuInfo));
+    winrt::check_bool(SetMenuInfo(m_helpMenu.get(), &menuInfo));
 }
 
 void MainWindow::CreateControls(HINSTANCE instance)
@@ -468,4 +479,21 @@ winrt::fire_and_forget MainWindow::CheckBinaryArchitecture()
         MessageBoxW(m_window, message.c_str(), L"Process Viewer", MB_OK);
     }
     co_return;
+}
+
+winrt::fire_and_forget MainWindow::ShowAboutAsync()
+{
+    auto dialog = winrt::MessageDialog(L"ProcessViewer is an open source application written by Robert Mikhayelyan", L"About");
+    auto commands = dialog.Commands();
+    commands.Append(winrt::UICommand(L"Open GitHub", [](auto&) -> winrt::fire_and_forget
+        {
+            co_await winrt::Launcher::LaunchUriAsync(winrt::Uri(L"https://github.com/robmikh/ProcessViewer"));
+        }));
+    commands.Append(winrt::UICommand(L"Close"));
+
+    dialog.DefaultCommandIndex(1);
+    dialog.CancelCommandIndex(1);
+
+    InitializeObjectWithWindowHandle(dialog);
+    co_await dialog.ShowAsync();
 }
