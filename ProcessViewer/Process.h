@@ -4,7 +4,7 @@ enum class ProcessInformation
 {
     Pid,
     Name,
-    Status,
+    Type,
     Architecture,
 };
 
@@ -18,8 +18,8 @@ inline std::wostream& operator<< (std::wostream& os, ProcessInformation const& i
     case ProcessInformation::Name:
         os << L"Name";
         break;
-    case ProcessInformation::Status:
-        os << L"Status";
+    case ProcessInformation::Type:
+        os << L"Type";
         break;
     case ProcessInformation::Architecture:
         os << L"Architecture";
@@ -77,10 +77,45 @@ inline std::wostream& operator<< (std::wostream& os, Architecture const& arch)
     return os;
 }
 
+enum class ProcessType
+{
+    Legacy, // TODO: Better name, split packaged/unpackaged
+    AppContainer,
+};
+
+inline std::wostream& operator<< (std::wostream& os, ProcessType const& type)
+{
+    switch (type)
+    {
+    case ProcessType::Legacy:
+        os << L"Legacy";
+        break;
+    case ProcessType::AppContainer:
+        os << L"AppContainer";
+        break;
+    }
+    return os;
+}
+
+template<typename T>
+inline std::wostream& operator<< (std::wostream& os, std::optional<T> const& optional)
+{
+    if (optional.has_value())
+    {
+        os << *optional;
+    }
+    else
+    {
+        os << L"Unknown";
+    }
+    return os;
+}
+
 struct Process
 {
     DWORD Pid;
     std::wstring Name;
+    std::optional<ProcessType> Type;
     USHORT ArchitectureValue;
 
     Architecture GetArchitecture()
@@ -94,9 +129,17 @@ inline wil::unique_handle GetProcessHandleFromPid(DWORD pid)
     return wil::unique_handle(winrt::check_pointer(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)));
 }
 
+inline wil::unique_handle GetProcessToken(wil::unique_handle const& processHandle)
+{
+    wil::unique_handle processToken;
+    winrt::check_bool(OpenProcessToken(processHandle.get(), TOKEN_QUERY, processToken.put()));
+    return processToken;
+}
+
 inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const& processName)
 {
     USHORT archValue = IMAGE_FILE_MACHINE_UNKNOWN;
+    std::optional<ProcessType> processType = std::nullopt;
     try
     {
         auto handle = GetProcessHandleFromPid(pid);
@@ -104,19 +147,35 @@ inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const
         USHORT machine = 0;
         winrt::check_bool(IsWow64Process2(handle.get(), &process, &machine));
         archValue = process == IMAGE_FILE_MACHINE_UNKNOWN ? machine : process;
+
+        auto token = GetProcessToken(handle);
+        BOOL isAppContainer = FALSE;
+        DWORD length = 0;
+        winrt::check_bool(GetTokenInformation(token.get(), TokenIsAppContainer, &isAppContainer, sizeof(BOOL), &length));
+        WINRT_VERIFY(length == sizeof(BOOL));
+        if (isAppContainer)
+        {
+            processType = std::optional(ProcessType::AppContainer);
+        }
+        else
+        {
+            processType = std::optional(ProcessType::Legacy);
+        }
     }
     catch (winrt::hresult_error const& error)
     {
-        if (error.code() == E_INVALIDARG)
+        const auto code = error.code();
+        if (code == E_INVALIDARG)
         {
             return std::nullopt;
         }
-        if (error.code() != E_ACCESSDENIED)
+        if (code != E_ACCESSDENIED &&
+            code != HRESULT_FROM_WIN32(ERROR_NOACCESS))
         {
             throw;
         }
     }
-    return std::optional(Process{ pid, processName, archValue });
+    return std::optional(Process{ pid, processName, processType, archValue });
 }
 
 inline std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W const& entry)

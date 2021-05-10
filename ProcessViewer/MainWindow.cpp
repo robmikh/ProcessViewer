@@ -46,7 +46,7 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
     {
         ProcessInformation::Name,
         ProcessInformation::Pid,
-        ProcessInformation::Status,
+        ProcessInformation::Type,
         ProcessInformation::Architecture
     };
     m_processes = GetAllProcesses();
@@ -97,8 +97,37 @@ bool MainWindow::CompareProcesses(
             return value > 0;
         }
     }
-    case ProcessInformation::Status:
-        return false;
+    case ProcessInformation::Type:
+        if (sort == ColumnSorting::Ascending)
+        {
+            if (!left.Type.has_value())
+            {
+                return true;
+            }
+            else if (!right.Type.has_value())
+            {
+                return false;
+            }
+            else
+            {
+                return *left.Type < *right.Type;
+            }
+        }
+        else
+        {
+            if (!left.Type.has_value())
+            {
+                return false;
+            }
+            else if (!right.Type.has_value())
+            {
+                return true;
+            }
+            else
+            {
+                return *left.Type > *right.Type;
+            }
+        }
     case ProcessInformation::Architecture:
         if (sort == ColumnSorting::Ascending)
         {
@@ -314,8 +343,8 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
                 case ProcessInformation::Name:
                     stream << process.Name;
                     break;
-                case ProcessInformation::Status:
-                    stream << L"Unknown status";
+                case ProcessInformation::Type:
+                    stream << process.Type;
                     break;
                 case ProcessInformation::Architecture:
                     stream << process.GetArchitecture();
