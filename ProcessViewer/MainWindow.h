@@ -11,6 +11,7 @@ struct MainWindow : robmikh::common::desktop::DesktopWindow<MainWindow>
     LRESULT MessageHandler(UINT const message, WPARAM const wparam, LPARAM const lparam);
 
 private:
+    using unique_himagelist = wil::unique_any<HIMAGELIST, decltype(&::ImageList_Destroy), ::ImageList_Destroy>;
 
     enum class ColumnSorting
     {
@@ -25,6 +26,8 @@ private:
     void CreateControls(HINSTANCE instance);
     void ResizeProcessListView();
     void OnListViewNotify(LPARAM const lparam);
+    void ResetProcessIconsCache();
+    void EnsureProcessIcon(std::wstring const& exePath);
 
     winrt::fire_and_forget CheckBinaryArchitecture();
     
@@ -38,10 +41,13 @@ private:
 
 private:
     HWND m_processListView = nullptr;
+    unique_himagelist m_imageList;
     std::vector<ProcessInformation> m_columns;
     size_t m_selectedColumnIndex = 1;
     ColumnSorting m_columnSort = ColumnSorting::Ascending;
     std::vector<Process> m_processes;
+    std::map<std::wstring, size_t> m_pathToIconIndex;
+    std::vector<wil::shared_hicon> m_icons;
     wil::unique_hmenu m_menuBar;
     wil::unique_hmenu m_fileMenu;
     wil::unique_hmenu m_viewMenu;

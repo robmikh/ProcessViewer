@@ -58,6 +58,9 @@
 // WinMD
 #include <winmd_reader.h>
 
+// Controls
+#include <CommCtrl.h>
+
 // robmikh.common
 #include <robmikh.common/composition.interop.h>
 #include <robmikh.common/direct3d11.interop.h>

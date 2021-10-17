@@ -175,6 +175,7 @@ struct Process
 {
     DWORD Pid;
     std::wstring Name;
+    std::wstring ExecutablePath;
     std::optional<ProcessType> Type;
     USHORT ArchitectureValue;
     std::optional<IntegrityLevel> IntegrityLevel;
@@ -242,11 +243,21 @@ inline std::optional<IntegrityLevel> GetIntegrityLevelFromProcessToken(wil::uniq
     }
 }
 
+inline std::wstring GetExectuablePathFromProcess(wil::unique_handle const& processHandle)
+{
+    std::wstring exePath(MAX_PATH, L'\0');
+    DWORD length = static_cast<DWORD>(exePath.size());
+    winrt::check_bool(QueryFullProcessImageNameW(processHandle.get(), 0, exePath.data(), &length));
+    exePath.resize(length, L'\0');
+    return exePath;
+}
+
 inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const& processName)
 {
     USHORT archValue = IMAGE_FILE_MACHINE_UNKNOWN;
     std::optional<ProcessType> processType = std::nullopt;
     std::optional<IntegrityLevel> ilevel = std::nullopt;
+    std::wstring exeName;
     try
     {
         auto handle = GetProcessHandleFromPid(pid);
@@ -254,6 +265,8 @@ inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const
         USHORT machine = 0;
         winrt::check_bool(IsWow64Process2(handle.get(), &process, &machine));
         archValue = process == IMAGE_FILE_MACHINE_UNKNOWN ? machine : process;
+
+        exeName = GetExectuablePathFromProcess(handle);
 
         auto token = GetProcessToken(handle);
         BOOL isAppContainer = FALSE;
@@ -284,7 +297,7 @@ inline std::optional<Process> CreateProcessFromPid(DWORD pid, std::wstring const
             throw;
         }
     }
-    return std::optional(Process{ pid, processName, processType, archValue, ilevel });
+    return std::optional(Process{ pid, processName, exeName, processType, archValue, ilevel });
 }
 
 inline std::optional<Process> CreateProcessFromProcessEntry(PROCESSENTRY32W const& entry)

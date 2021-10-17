@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "MainWindow.h"
-#include <CommCtrl.h>
+#include <shellapi.h>
 
 namespace winrt
 {
@@ -196,8 +196,10 @@ void MainWindow::InsertProcess(Process const& process)
         auto newIndex = GetProcessInsertIterator(process);
         LVITEMW item = {};
         item.iItem = static_cast<int>(newIndex - m_processes.begin());
+        //item.iImage = I_IMAGECALLBACK;
         m_processes.insert(newIndex, process);
         ListView_InsertItem(m_processListView, &item);
+        EnsureProcessIcon(process.ExecutablePath);
     }
 }
 
@@ -333,6 +335,9 @@ void MainWindow::CreateControls(HINSTANCE instance)
         ListView_SetExtendedListViewStyle(m_processListView, LVS_EX_AUTOSIZECOLUMNS | LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     }
 
+    // Setup icon list
+    ResetProcessIconsCache();
+
     // Add items
     ListView_SetItemCount(m_processListView, m_processes.size());
 
@@ -364,20 +369,31 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
     {
     case LVN_GETDISPINFOW:
     {
-        auto lpdi = (NMLVDISPINFOW*)lparam;
-        auto itemIndex = lpdi->item.iItem;
-        auto subItemIndex = lpdi->item.iSubItem;
+        auto itemDisplayInfo = reinterpret_cast<NMLVDISPINFOW*>(lparam);
+        auto itemIndex = itemDisplayInfo->item.iItem;
+        auto subItemIndex = itemDisplayInfo->item.iSubItem;
         if (subItemIndex == 0)
         {
-            if (lpdi->item.mask & LVIF_TEXT)
+            if (itemDisplayInfo->item.mask & LVIF_TEXT)
             {
                 auto& process = m_processes[itemIndex];
-                wcsncpy_s(lpdi->item.pszText, lpdi->item.cchTextMax, process.Name.data(), _TRUNCATE);
+                wcsncpy_s(itemDisplayInfo->item.pszText, itemDisplayInfo->item.cchTextMax, process.Name.data(), _TRUNCATE);
+            }
+            if (itemDisplayInfo->item.mask & LVIF_IMAGE)
+            {
+                auto& process = m_processes[itemIndex];
+                auto search = m_pathToIconIndex.find(process.ExecutablePath);
+                int iconIndex = 0;
+                if (search != m_pathToIconIndex.end())
+                {
+                    iconIndex = static_cast<int>(search->second);
+                }
+                itemDisplayInfo->item.iImage = iconIndex;
             }
         }
         else if (subItemIndex > 0)
         {
-            if (lpdi->item.mask & LVIF_TEXT)
+            if (itemDisplayInfo->item.mask & LVIF_TEXT)
             {
                 auto& process = m_processes[itemIndex];
                 auto& column = m_columns[subItemIndex];
@@ -400,7 +416,7 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
                     stream << process.IntegrityLevel;
                 }
                 auto string = stream.str();
-                wcsncpy_s(lpdi->item.pszText, lpdi->item.cchTextMax, string.data(), _TRUNCATE);
+                wcsncpy_s(itemDisplayInfo->item.pszText, itemDisplayInfo->item.cchTextMax, string.data(), _TRUNCATE);
             }
         }
     }
@@ -431,6 +447,55 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
         ListView_SetItemState(m_processListView, -1, 0, LVIS_FOCUSED);
     }
         break;
+    }
+}
+
+void MainWindow::ResetProcessIconsCache()
+{
+    m_imageList.reset(winrt::check_pointer(ImageList_Create(
+        GetSystemMetrics(SM_CXICON) / 2,
+        GetSystemMetrics(SM_CYICON) / 2,
+        ILC_MASK | ILC_COLOR32, 1, 1)));
+    m_icons.clear();
+    // Create a default icon
+    SHSTOCKICONINFO iconInfo = {};
+    iconInfo.cbSize = sizeof(iconInfo);
+    winrt::check_hresult(SHGetStockIconInfo(SIID_APPLICATION, SHGSI_ICON, &iconInfo));
+    wil::shared_hicon defaultIcon(winrt::check_pointer(iconInfo.hIcon));
+    m_icons.push_back(defaultIcon);
+    ImageList_AddIcon(m_imageList.get(), defaultIcon.get());
+    for (auto&& process : m_processes)
+    {
+        EnsureProcessIcon(process.ExecutablePath);
+    }
+    ListView_SetImageList(m_processListView, m_imageList.get(), LVSIL_SMALL);
+}
+
+void MainWindow::EnsureProcessIcon(std::wstring const& exePath)
+{
+    if (!exePath.empty())
+    {
+        auto search = m_pathToIconIndex.find(exePath);
+        if (search == m_pathToIconIndex.end())
+        {
+            auto instance = winrt::check_pointer(GetModuleHandleW(nullptr));
+            wil::shared_hicon exeIcon(ExtractIconW(instance, exePath.c_str(), 0));
+            if (exeIcon.is_valid())
+            {
+                auto index = m_icons.size();
+                m_icons.push_back(exeIcon);
+                m_pathToIconIndex.insert({ exePath, index });
+                ImageList_AddIcon(m_imageList.get(), exeIcon.get());
+            }
+            else
+            {
+                auto error = GetLastError();
+                if (!(error == ERROR_RESOURCE_TYPE_NOT_FOUND || error == ERROR_RESOURCE_DATA_NOT_FOUND))
+                {
+                    winrt::throw_last_error();
+                }
+            }
+        }
     }
 }
 
