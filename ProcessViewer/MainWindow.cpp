@@ -194,7 +194,7 @@ void MainWindow::InsertProcess(Process const& process)
     if (m_viewAccessibleProcess || process.ArchitectureValue != IMAGE_FILE_MACHINE_UNKNOWN)
     {
         auto newIndex = GetProcessInsertIterator(process);
-        LVITEM item = {};
+        LVITEMW item = {};
         item.iItem = static_cast<int>(newIndex - m_processes.begin());
         m_processes.insert(newIndex, process);
         ListView_InsertItem(m_processListView, &item);
@@ -300,7 +300,7 @@ void MainWindow::CreateControls(HINSTANCE instance)
 {
     auto style = WS_TABSTOP | WS_CHILD | WS_BORDER | WS_VISIBLE | LVS_AUTOARRANGE | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_SINGLESEL;
 
-    m_processListView = winrt::check_pointer(CreateWindowEx(
+    m_processListView = winrt::check_pointer(CreateWindowExW(
         0, //WS_EX_CLIENTEDGE,
         WC_LISTVIEW,
         L"",
@@ -313,7 +313,7 @@ void MainWindow::CreateControls(HINSTANCE instance)
 
     // Setup columns
     {
-        LV_COLUMN listViewColumn = {};
+        LVCOLUMNW listViewColumn = {};
         std::vector<std::wstring> columnNames;
         for (auto&& column : m_columns)
         {
@@ -364,7 +364,7 @@ void MainWindow::OnListViewNotify(LPARAM const lparam)
     {
     case LVN_GETDISPINFOW:
     {
-        auto lpdi = (LV_DISPINFO*)lparam;
+        auto lpdi = (NMLVDISPINFOW*)lparam;
         auto itemIndex = lpdi->item.iItem;
         auto subItemIndex = lpdi->item.iSubItem;
         if (subItemIndex == 0)
