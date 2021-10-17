@@ -31,6 +31,10 @@ private:
 
     winrt::fire_and_forget CheckBinaryArchitecture();
     
+    static bool CompareProcessId(
+        Process const& process1,
+        Process const& process2,
+        ColumnSorting const& sort);
     static bool CompareProcesses(
         Process const& process1, 
         Process const& process2,

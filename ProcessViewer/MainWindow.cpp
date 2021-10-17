@@ -72,6 +72,21 @@ MainWindow::MainWindow(std::wstring const& titleString, int width, int height)
         }));
 }
 
+bool MainWindow::CompareProcessId(
+    Process const& left,
+    Process const& right,
+    ColumnSorting const& sort)
+{
+    if (sort == ColumnSorting::Ascending)
+    {
+        return left.Pid < right.Pid;
+    }
+    else
+    {
+        return left.Pid > right.Pid;
+    }
+}
+
 bool MainWindow::CompareProcesses(
     Process const& left, 
     Process const& right,
@@ -81,18 +96,15 @@ bool MainWindow::CompareProcesses(
     switch (column)
     {
     case ProcessInformation::Pid:
-        if (sort == ColumnSorting::Ascending)
-        {
-            return left.Pid < right.Pid;
-        }
-        else
-        {
-            return left.Pid > right.Pid;
-        }
+        return CompareProcessId(left, right, sort);
     case ProcessInformation::Name:
     {
         auto value = _wcsicmp(left.Name.c_str(), right.Name.c_str());
-        if (sort == ColumnSorting::Ascending)
+        if (value == 0)
+        {
+            return CompareProcessId(left, right, sort);
+        }
+        else if (sort == ColumnSorting::Ascending)
         {
             return value < 0;
         }
@@ -102,7 +114,11 @@ bool MainWindow::CompareProcesses(
         }
     }
     case ProcessInformation::Type:
-        if (sort == ColumnSorting::Ascending)
+        if (left.Type == right.Type)
+        {
+            return CompareProcessId(left, right, sort);
+        }
+        else if (sort == ColumnSorting::Ascending)
         {
             if (!left.Type.has_value())
             {
@@ -133,7 +149,11 @@ bool MainWindow::CompareProcesses(
             }
         }
     case ProcessInformation::Architecture:
-        if (sort == ColumnSorting::Ascending)
+        if (left.ArchitectureValue == right.ArchitectureValue)
+        {
+            return CompareProcessId(left, right, sort);
+        }
+        else if (sort == ColumnSorting::Ascending)
         {
             return left.ArchitectureValue < right.ArchitectureValue;
         }
@@ -142,7 +162,11 @@ bool MainWindow::CompareProcesses(
             return left.ArchitectureValue > right.ArchitectureValue;
         }
     case ProcessInformation::IntegrityLevel:
-        if (sort == ColumnSorting::Ascending)
+        if (left.IntegrityLevel == right.IntegrityLevel)
+        {
+            return CompareProcessId(left, right, sort);
+        }
+        else if (sort == ColumnSorting::Ascending)
         {
             if (!left.IntegrityLevel.has_value())
             {
