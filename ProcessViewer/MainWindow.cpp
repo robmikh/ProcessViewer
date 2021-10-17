@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "MainWindow.h"
-#include <shellapi.h>
 
 namespace winrt
 {
@@ -196,7 +195,6 @@ void MainWindow::InsertProcess(Process const& process)
         auto newIndex = GetProcessInsertIterator(process);
         LVITEMW item = {};
         item.iItem = static_cast<int>(newIndex - m_processes.begin());
-        //item.iImage = I_IMAGECALLBACK;
         m_processes.insert(newIndex, process);
         ListView_InsertItem(m_processListView, &item);
         EnsureProcessIcon(process.ExecutablePath);

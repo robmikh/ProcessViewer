@@ -61,6 +61,9 @@
 // Controls
 #include <CommCtrl.h>
 
+// Icon extraction and defaults
+#include <shellapi.h>
+
 // robmikh.common
 #include <robmikh.common/composition.interop.h>
 #include <robmikh.common/direct3d11.interop.h>
