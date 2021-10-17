@@ -61,6 +61,9 @@ struct EventSink : winrt::implements<EventSink, IWbemObjectSink>
 
     IFACEMETHODIMP SetStatus(long flags, HRESULT result, BSTR strParam, IWbemClassObject* objParam)
     {
+        UNREFERENCED_PARAMETER(result);
+        UNREFERENCED_PARAMETER(strParam);
+        UNREFERENCED_PARAMETER(objParam);
         // TODO: Do I need to handle this?
         if (flags == WBEM_STATUS_COMPLETE)
         {

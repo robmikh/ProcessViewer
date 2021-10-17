@@ -19,6 +19,8 @@ namespace winmd
 
 const std::wstring MainWindow::ClassName = L"ProcessViewer.MainWindow";
 
+std::string GetStringFromPath(winrt::hstring const& path);
+
 void MainWindow::RegisterWindowClass()
 {
     auto instance = winrt::check_pointer(GetModuleHandleW(nullptr));
@@ -171,6 +173,8 @@ bool MainWindow::CompareProcesses(
                 return *left.IntegrityLevel > *right.IntegrityLevel;
             }
         }
+    default:
+        std::abort();
     }
 }
 
@@ -191,7 +195,7 @@ void MainWindow::InsertProcess(Process const& process)
     {
         auto newIndex = GetProcessInsertIterator(process);
         LVITEM item = {};
-        item.iItem = newIndex - m_processes.begin();
+        item.iItem = static_cast<int>(newIndex - m_processes.begin());
         m_processes.insert(newIndex, process);
         ListView_InsertItem(m_processListView, &item);
     }
@@ -224,8 +228,8 @@ LRESULT MainWindow::MessageHandler(UINT const message, WPARAM const wparam, LPAR
         break;
     case WM_MENUCOMMAND:
     {
-        auto menu = (HMENU)lparam;
-        int index = wparam;
+        auto menu = reinterpret_cast<HMENU>(lparam);
+        //int index = static_cast<int>(wparam);
         if (menu == m_fileMenu.get())
         {
             // TODO: Check the index, but currently there's only one item
@@ -309,7 +313,7 @@ void MainWindow::CreateControls(HINSTANCE instance)
 
     // Setup columns
     {
-        LV_COLUMN column = {};
+        LV_COLUMN listViewColumn = {};
         std::vector<std::wstring> columnNames;
         for (auto&& column : m_columns)
         {
@@ -318,13 +322,13 @@ void MainWindow::CreateControls(HINSTANCE instance)
             columnNames.push_back(stream.str());
         }
 
-        column.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
-        column.fmt = LVCFMT_LEFT;
-        column.cx = 120;
+        listViewColumn.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+        listViewColumn.fmt = LVCFMT_LEFT;
+        listViewColumn.cx = 120;
         for (auto i = 0; i < columnNames.size(); i++)
         {
-            column.pszText = columnNames[i].data();
-            ListView_InsertColumn(m_processListView, i, &column);
+            listViewColumn.pszText = columnNames[i].data();
+            ListView_InsertColumn(m_processListView, i, &listViewColumn);
         }
         ListView_SetExtendedListViewStyle(m_processListView, LVS_EX_AUTOSIZECOLUMNS | LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
     }
@@ -353,8 +357,8 @@ void MainWindow::ResizeProcessListView()
 
 void MainWindow::OnListViewNotify(LPARAM const lparam)
 {
-    auto  lpnmh = (LPNMHDR)lparam;
-    auto listView = winrt::check_pointer(GetDlgItem(m_window, ID_LISTVIEW));
+    auto  lpnmh = reinterpret_cast<LPNMHDR>(lparam);
+    //auto listView = winrt::check_pointer(GetDlgItem(m_window, ID_LISTVIEW));
 
     switch (lpnmh->code)
     {
@@ -444,21 +448,20 @@ winrt::fire_and_forget MainWindow::CheckBinaryArchitecture()
         co_await m_dispatcherQueue;
 
         auto name = file.Name();
-        auto wpath = file.Path();
-        auto path = std::string(wpath.begin(), wpath.end());
+        auto path = GetStringFromPath(file.Path());
         winmd::file_view view(path);
 
         uint16_t machine = IMAGE_FILE_MACHINE_UNKNOWN;
         try
         {
             // adapted from https://github.com/microsoft/winmd/blob/ab1436427ede293ddad944d3688e83b3fba3a173/src/impl/winmd_reader/database.h#L229
-            auto dos = view.as<winmd::impl::image_dos_header>();
+            auto& dos = view.as<winmd::impl::image_dos_header>();
             if (dos.e_signature != 0x5A4D) // IMAGE_DOS_SIGNATURE
             {
                 winmd::impl::throw_invalid("Invalid DOS signature");
             }
 
-            auto pe = view.as<winmd::impl::image_nt_headers32>(dos.e_lfanew);
+            auto& pe = view.as<winmd::impl::image_nt_headers32>(dos.e_lfanew);
             if (pe.FileHeader.NumberOfSections == 0 || pe.FileHeader.NumberOfSections > 100)
             {
                 winmd::impl::throw_invalid("Invalid PE section count");
@@ -496,4 +499,14 @@ winrt::fire_and_forget MainWindow::ShowAboutAsync()
 
     InitializeObjectWithWindowHandle(dialog);
     co_await dialog.ShowAsync();
+}
+
+std::string GetStringFromPath(winrt::hstring const& path)
+{
+    std::wstring input(path);
+    auto const input_length = static_cast<uint32_t>(input.length() + 1);
+    int buffer_length = WideCharToMultiByte(CP_UTF8, 0, input.data(), input_length, 0, 0, nullptr, nullptr);
+    std::string output(buffer_length, '\0');
+    winrt::check_bool(WideCharToMultiByte(CP_UTF8, 0, input.data(), input_length, output.data(), buffer_length, nullptr, nullptr) > 0);
+    return output;
 }

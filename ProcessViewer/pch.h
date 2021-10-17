@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <functional>
 #include <cstring>
+#include <sstream>
 
 // Windows tool helpers
 #include <tlhelp32.h>

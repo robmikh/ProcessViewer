@@ -130,6 +130,8 @@ inline std::wostream& operator<< (std::wostream& os, IntegrityLevel const& ileve
         return os << L"System";
     case IntegrityLevel::ProtectedProcess:
         return os << L"ProtectedProcess";
+    default:
+        std::abort();
     }
 }
 
